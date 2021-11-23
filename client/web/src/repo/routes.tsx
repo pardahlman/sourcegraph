@@ -128,8 +128,6 @@ export const repoRevisionContainerRoutes: readonly RepoRevisionContainerRoute[] 
             match,
             patternType,
             setPatternType,
-            caseSensitive,
-            setCaseSensitivity,
             globbing,
             ...context
         }: RepoRevisionContainerContext &
@@ -184,8 +182,6 @@ export const repoRevisionContainerRoutes: readonly RepoRevisionContainerRoute[] 
                 filePath,
                 patternType,
                 setPatternType,
-                caseSensitive,
-                setCaseSensitivity,
                 globbing,
             }
 

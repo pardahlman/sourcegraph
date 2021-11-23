@@ -1,3 +1,4 @@
+import assert from 'assert'
 import { mount } from 'enzyme'
 import { createBrowserHistory } from 'history'
 import React from 'react'
@@ -9,6 +10,7 @@ import { extensionsController } from '@sourcegraph/shared/src/util/searchTestHel
 
 import { SearchPatternType } from './graphql-operations'
 import { Layout, LayoutProps } from './Layout'
+import { useGlobalStore } from './stores/global'
 
 jest.mock('./theme', () => ({
     useTheme: () => ({
@@ -25,8 +27,6 @@ describe('Layout', () => {
         setParsedSearchQuery: () => {},
         patternType: SearchPatternType.literal,
         setPatternType: () => {},
-        caseSensitive: false,
-        setCaseSensitivity: () => {},
 
         // Other minimum props required to render
         routes: [],
@@ -45,6 +45,8 @@ describe('Layout', () => {
         const root = document.createElement('div')
         root.id = 'root'
         document.body.append(root)
+
+        useGlobalStore.setState({ searchCaseSensitivity: false })
     })
 
     afterEach(() => {
@@ -199,47 +201,18 @@ describe('Layout', () => {
         const history = createBrowserHistory()
         history.replace({ search: 'q=r:golang/oauth2+test+f:travis case:yes' })
 
-        const setCaseSensitivitySpy = sinon.spy()
+        useGlobalStore.setState({
+            searchCaseSensitivity: false,
+        })
 
         const element = mount(
             <BrowserRouter>
-                <Layout
-                    {...defaultProps}
-                    history={history}
-                    location={history.location}
-                    caseSensitive={false}
-                    setCaseSensitivity={setCaseSensitivitySpy}
-                />
+                <Layout {...defaultProps} history={history} location={history.location} />
             </BrowserRouter>,
             { attachTo: document.querySelector('#root') as HTMLElement }
         )
 
-        sinon.assert.called(setCaseSensitivitySpy)
-        sinon.assert.calledWith(setCaseSensitivitySpy, true)
-
-        element.unmount()
-    })
-
-    it('should not update caseSensitive if URL and context are the same', () => {
-        const history = createBrowserHistory()
-        history.replace({ search: 'q=r:golang/oauth2+test+f:travis+case:yes' })
-
-        const setCaseSensitivitySpy = sinon.spy()
-
-        const element = mount(
-            <BrowserRouter>
-                <Layout
-                    {...defaultProps}
-                    history={history}
-                    location={history.location}
-                    caseSensitive={true}
-                    setCaseSensitivity={setCaseSensitivitySpy}
-                />
-            </BrowserRouter>,
-            { attachTo: document.querySelector('#root') as HTMLElement }
-        )
-
-        sinon.assert.notCalled(setCaseSensitivitySpy)
+        assert.strictEqual(useGlobalStore.getState().searchCaseSensitivity, true)
 
         element.unmount()
     })
@@ -248,22 +221,18 @@ describe('Layout', () => {
         const history = createBrowserHistory()
         history.replace({ search: 'q=case:yes' })
 
-        const setCaseSensitivitySpy = sinon.spy()
+        useGlobalStore.setState({
+            searchCaseSensitivity: false,
+        })
 
         const element = mount(
             <BrowserRouter>
-                <Layout
-                    {...defaultProps}
-                    history={history}
-                    location={history.location}
-                    caseSensitive={false}
-                    setCaseSensitivity={setCaseSensitivitySpy}
-                />
+                <Layout {...defaultProps} history={history} location={history.location} />
             </BrowserRouter>,
             { attachTo: document.querySelector('#root') as HTMLElement }
         )
 
-        sinon.assert.notCalled(setCaseSensitivitySpy)
+        assert.strictEqual(useGlobalStore.getState().searchCaseSensitivity, false)
 
         element.unmount()
     })

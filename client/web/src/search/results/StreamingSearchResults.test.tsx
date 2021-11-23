@@ -24,6 +24,7 @@ import {
 import { SearchResult } from '../../components/SearchResult'
 import { EMPTY_FEATURE_FLAGS } from '../../featureFlags/featureFlags'
 import { SavedSearchModal } from '../../savedSearches/SavedSearchModal'
+import { useGlobalStore } from '../../stores/global'
 import * as helpers from '../helpers'
 
 import { StreamingProgress } from './progress/StreamingProgress'
@@ -38,7 +39,6 @@ describe('StreamingSearchResults', () => {
 
     const defaultProps: StreamingSearchResultsProps = {
         parsedSearchQuery: 'r:golang/oauth2 test f:travis',
-        caseSensitive: false,
         patternType: SearchPatternType.literal,
 
         extensionsController,
@@ -76,7 +76,12 @@ describe('StreamingSearchResults', () => {
         )
     }
 
+    beforeEach(() => {
+        useGlobalStore.setState({ searchCaseSensitivity: false })
+    })
+
     it('should call streaming search API with the right parameters from URL', async () => {
+        useGlobalStore.setState({ searchCaseSensitivity: true })
         const searchSpy = sinon.spy(defaultProps.streamSearch)
 
         const element = render(
@@ -84,7 +89,6 @@ describe('StreamingSearchResults', () => {
                 {...defaultProps}
                 parsedSearchQuery="r:golang/oauth2 test f:travis"
                 patternType={SearchPatternType.regexp}
-                caseSensitive={true}
                 streamSearch={searchSpy}
             />
         )

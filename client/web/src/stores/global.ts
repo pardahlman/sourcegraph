@@ -2,7 +2,7 @@ import create from 'zustand'
 
 import { NavbarQueryState, createNavbarQueryStateStore } from './navbarSearchQueryState'
 
-interface GlobalStore extends NavbarQueryState {}
+export interface GlobalStore extends NavbarQueryState {}
 
 /**
  * This store is used to separate global/shared state from our component hierarchy.
