@@ -126,6 +126,8 @@ export const BackendInsight: React.FunctionComponent<BackendInsightProps> = prop
         return
     }
 
+    const chartLegendOrintation = insight.series.length > 3 ? 'horizontal' : 'vertical'
+
     return (
         <View.Root
             {...otherProps}
@@ -172,7 +174,7 @@ export const BackendInsight: React.FunctionComponent<BackendInsightProps> = prop
                 </View.ErrorContent>
             ) : (
                 data && (
-                    <LineChartSettingsContext.Provider value={{ zeroYAxisMin, layout: 'vertical' }}>
+                    <LineChartSettingsContext.Provider value={{ zeroYAxisMin, layout: chartLegendOrintation }}>
                         <View.Content
                             telemetryService={telemetryService}
                             content={data.view.content}
