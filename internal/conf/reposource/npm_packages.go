@@ -22,7 +22,11 @@ var (
 	scopedPackageNameRegex = lazyregexp.New(
 		`^(@` + NPMScopeRegexString + `/)?` +
 			npmPackageNameRegexString +
-			`@(?P<version>[0-9a-z_\\-]+(\.[0-9a-z_\\-]+)*)$`)
+			// The "lowercase characters only" rule in
+			// https://github.com/npm/validate-npm-package-name#naming-rules
+			// applies to package names, not versions, so we allow uppercase
+			// characters in versions.
+			`@(?P<version>[0-9a-zA-Z_\\-]+(\.[0-9a-zA-Z_\\-]+)*)$`)
 	npmURLRegex = lazyregexp.New(
 		`^npm/(` + NPMScopeRegexString + `/)?` +
 			npmPackageNameRegexString + `$`)
