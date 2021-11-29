@@ -2,8 +2,11 @@ package server
 
 import (
 	"context"
-	"github.com/cockroachdb/errors"
 	"os/exec"
+	"path"
+	"strings"
+
+	"github.com/cockroachdb/errors"
 
 	"github.com/sourcegraph/sourcegraph/internal/conf/reposource"
 )
@@ -51,3 +54,19 @@ func isPotentiallyMaliciousFilepathInArchive(filepath, destinationDir string) (o
 	}
 	return cleanedOutputPath, false
 }
+
+// [NOTE: LSIF-config-json]
+//
+// For JVM languages, when we create a fake Git repository from a Maven module
+// we also add a lsif-java.json file to the repository. This is done for two
+// reasons:
+// 1. A specific JDK version is needed to correctly index the code. This JDK
+//    version needs to be specified when launching lsif-java. So if we wanted
+//    to determine the JDK version at auto-indexing time (instead of at upload
+//    time), we'd need to have a separate tool that ran before lsif-java.
+// 2. For the JDK case, there is a special case where we only emit "export"
+//    monikers instead of "import".
+//
+// The same doesn't apply for Javascript/Typescript, since there is
+// no clear source of truth for the version of the runtime (Node etc.) that is
+// needed, and there is no special NPM module analogous to the JDK.

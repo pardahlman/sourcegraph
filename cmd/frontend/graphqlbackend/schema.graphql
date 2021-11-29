@@ -2233,6 +2233,7 @@ enum ExternalServiceKind {
     GITLAB
     GITOLITE
     JVMPACKAGES
+    NPMPACKAGES
     OTHER
     PAGURE
     PERFORCE
