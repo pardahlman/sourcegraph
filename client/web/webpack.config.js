@@ -13,9 +13,10 @@ const webpack = require('webpack')
 const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer')
 const { WebpackManifestPlugin } = require('webpack-manifest-plugin')
 
+const { MONACO_LANGUAGES_AND_FEATURES } = require('@sourcegraph/build-config')
+
 const { getCSSLoaders } = require('./dev/webpack/get-css-loaders')
 const { getHTMLWebpackPlugins } = require('./dev/webpack/get-html-webpack-plugins')
-const { MONACO_LANGUAGES_AND_FEATURES } = require('./dev/webpack/monacoWebpack')
 const { isHotReloadEnabled } = require('./src/integration/environment')
 
 const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development'
