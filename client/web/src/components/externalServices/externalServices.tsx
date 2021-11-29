@@ -1251,23 +1251,19 @@ const NPM_PACKAGES: AddExternalServiceOptions = {
         <div>
             <ol>
                 <li>
-                    In the configuration below, set <Field>npmConfig.registries</Field> to the list of NPM
-                    registries.
+                    In the configuration below, set <Field>npmConfig.registries</Field> to the list of NPM registries.
                     For example,
-                    <code>["https://registry.npmjs.mycompany.com",
-                        "https://registry.npmjs.org/"]</code>.
-                    Note that this URL may not be the same as where packages can be searched (such
-                    as <code>https://www.npmjs.org</code>).
-                    If you're unsure about the exact registry URL for a custom registry,
-                    check the URLs for packages that have already been resolved,
-                    such as those in existing lock files like <code>yarn.lock</code>.
+                    <code>["https://registry.npmjs.mycompany.com", "https://registry.npmjs.org/"]</code>. Note that this
+                    URL may not be the same as where packages can be searched (such as{' '}
+                    <code>https://www.npmjs.org</code>). If you're unsure about the exact registry URL for a custom
+                    registry, check the URLs for packages that have already been resolved, such as those in existing
+                    lock files like <code>yarn.lock</code>.
                 </li>
                 <li>
-                    In the configuration below, set <Field>npmConfig.dependencies</Field> to the
-                    list of packages that you
-                    want to manually add. For example,
-                    <code>"react@17.0.2"</code> or <code>"@types/lodash@latest"</code>.
-                    Version ranges are not supported.
+                    In the configuration below, set <Field>npmConfig.dependencies</Field> to the list of packages that
+                    you want to manually add. For example,
+                    <code>"react@17.0.2"</code> or <code>"@types/lodash@latest"</code>. Version ranges are not
+                    supported.
                 </li>
             </ol>
         </div>
@@ -1289,7 +1285,7 @@ export const codeHostExternalServices: Record<string, AddExternalServiceOptions>
     ...(window.context?.experimentalFeatures?.perforce === 'enabled' ? { perforce: PERFORCE } : {}),
     ...(window.context?.experimentalFeatures?.jvmPackages === 'enabled' ? { jvmPackages: JVM_PACKAGES } : {}),
     ...(window.context?.experimentalFeatures?.pagure === 'enabled' ? { pagure: PAGURE } : {}),
-    ...(window.context?.experimentalFeatures?.npmPackages === 'enabled' ? {npmPackages: NPM_PACKAGES} : {}),
+    ...(window.context?.experimentalFeatures?.npmPackages === 'enabled' ? { npmPackages: NPM_PACKAGES } : {}),
 }
 
 export const nonCodeHostExternalServices: Record<string, AddExternalServiceOptions> = {

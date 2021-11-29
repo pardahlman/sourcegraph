@@ -17,9 +17,7 @@
           "description": "The URL at which the NPM registry can be found.",
           "type": "string",
           "default": "https://registry.npmjs.org",
-          "examples": [
-            "https://npm-registry.mycompany.com"
-          ]
+          "examples": ["https://npm-registry.mycompany.com"]
         },
         "rateLimit": {
           "description": "Rate limit applied when making background API requests to the NPM registry.",

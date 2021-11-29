@@ -70,7 +70,7 @@ func TestNoMaliciousFilesNPM(t *testing.T) {
 
 func createMaliciousTgz(t *testing.T, tgzPath string) {
 	fileInfos := []fileInfo{
-		fileInfo{harmlessPath, []byte{}},
+		{harmlessPath, []byte{}},
 	}
 	for _, filepath := range maliciousPaths {
 		fileInfos = append(fileInfos, fileInfo{filepath, []byte{}})
@@ -137,7 +137,7 @@ func TestNPMCloneCommand(t *testing.T) {
 func createPlaceholderSourcesTgz(t *testing.T, dir, contents, filename, tgzFilename string) {
 	createTgz(t, path.Join(dir, tgzFilename),
 		[]fileInfo{
-			fileInfo{filename, []byte(contents)},
+			{filename, []byte(contents)},
 		})
 }
 
