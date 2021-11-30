@@ -137,6 +137,10 @@ describe('Code monitoring', () => {
 
             await driver.page.click('.test-action-button')
             await driver.page.waitForSelector('.test-action-form')
+            await percySnapshotWithVariants(
+                driver.page,
+                'Disables the actions area until trigger is complete on Code monitoring - Form'
+            )
         })
 
         it('disables submitting the code monitor area until trigger and action are complete', async () => {
@@ -175,6 +179,10 @@ describe('Code monitoring', () => {
                 ),
                 false,
                 'Expected submit monitor button to be enabled'
+            )
+            await percySnapshotWithVariants(
+                driver.page,
+                'Disables submitting the code monitor area until trigger and action are complete on Code monitoring - Form'
             )
         })
     })
