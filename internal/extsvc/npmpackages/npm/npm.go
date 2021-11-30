@@ -128,6 +128,11 @@ func runNPMCommand(ctx context.Context, config *schema.NPMPackagesConnection, ar
 	defer endObservation(1, observation.Args{})
 
 	cmd := exec.CommandContext(ctx, NPMBinary, args...)
+	// Make sure node is usable, but don't copy the full environment.
+	// See also: forwardedHostEnvVars
+	cmd.Env = []string{}
+	cmd.Env = append(cmd.Env, fmt.Sprintf("HOME=%s", os.Getenv("HOME")))
+	cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s", os.Getenv("PATH")))
 	// TODO: [npm-package-support-credentials] Unlike Coursier where credentials are passed directly,
 	// npm's API involves login/logout commands. My instinct is that doing a login+logout for every command
 	// is a bad idea. Maybe we can hoist out the login and logout operations? Say something like:
