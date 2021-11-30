@@ -211,6 +211,7 @@ func (s *NPMPackagesSyncer) gitPushDependencyTag(ctx context.Context, bareGitDir
 	if err != nil {
 		return err
 	}
+	defer os.Remove(sourceCodePath)
 
 	cmd := exec.CommandContext(ctx, "git", "init")
 	if _, err := runCommandInDirectory(ctx, cmd, tmpDirectory, dependency); err != nil {
