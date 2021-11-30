@@ -106,6 +106,7 @@ require (
 	github.com/opentracing-contrib/go-stdlib v1.0.0
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/peterbourgon/ff v1.7.1
+	github.com/peterbourgon/ff/v3 v3.1.2
 	github.com/peterhellberg/link v1.1.0
 	github.com/prometheus/alertmanager v0.23.0
 	github.com/prometheus/client_golang v1.11.0
