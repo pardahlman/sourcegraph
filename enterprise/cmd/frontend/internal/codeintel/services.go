@@ -39,7 +39,7 @@ type Services struct {
 	hub             *sentry.Hub
 }
 
-func NewServices(ctx context.Context, siteConfig conftypes.SiteConfigQuerier, db dbutil.DB) (*Services, error) {
+func NewServices(ctx context.Context, siteConfig conftypes.WatchableSiteConfig, db dbutil.DB) (*Services, error) {
 	if err := config.UploadStoreConfig.Validate(); err != nil {
 		return nil, errors.Errorf("failed to load config: %s", err)
 	}
@@ -52,7 +52,13 @@ func NewServices(ctx context.Context, siteConfig conftypes.SiteConfigQuerier, db
 	}
 
 	// Initialize sentry hub
-	hub, err := sentry.NewWithDsn(siteConfig.SiteConfig().Log.Sentry.CodeIntelDSN)
+	hub, err := sentry.NewWithDsn(
+		siteConfig.SiteConfig().Log.Sentry.CodeIntelDSN,
+		siteConfig,
+		func(c conftypes.SiteConfigQuerier) (dsn string) {
+			return c.SiteConfig().Log.Sentry.CodeIntelDSN
+		},
+	)
 	if err != nil {
 		log.Fatalf("Failed to initialize sentry hub: %s", err)
 	}
