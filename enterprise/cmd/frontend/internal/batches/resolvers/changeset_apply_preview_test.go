@@ -104,7 +104,7 @@ func TestChangesetApplyPreviewResolver(t *testing.T) {
 		OwnedByBatchChange: batchChange.ID,
 	})
 
-	s, err := graphqlbackend.NewSchema(database.NewDB(db), &Resolver{store: cstore}, nil, nil, nil, nil, nil, nil, nil, nil)
+	s, err := graphqlbackend.NewSchema(database.NewDB(db), &Resolver{store: cstore}, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestChangesetApplyPreviewResolverWithPublicationStates(t *testing.T) {
 	repo := newGitHubTestRepo("github.com/sourcegraph/test", newGitHubExternalService(t, esStore))
 	require.Nil(t, repoStore.Create(ctx, repo))
 
-	s, err := graphqlbackend.NewSchema(database.NewDB(db), &Resolver{store: bstore}, nil, nil, nil, nil, nil, nil, nil, nil)
+	s, err := graphqlbackend.NewSchema(database.NewDB(db), &Resolver{store: bstore}, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	require.Nil(t, err)
 
 	// To make it easier to assert against the operations in a preview node,
@@ -398,7 +398,6 @@ func TestChangesetApplyPreviewResolverWithPublicationStates(t *testing.T) {
 		assertOperations(t, previews, newFx.specToBeDraft, publishDraftOps)
 		assertOperations(t, previews, newFx.specToBeUnpublished, noOps)
 		assertOperations(t, previews, newFx.specToBeOmitted, noOps)
-
 	})
 
 	t.Run("conflicting publication state", func(t *testing.T) {
