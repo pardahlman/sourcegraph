@@ -11,6 +11,7 @@ import { WebIntegrationTestContext, createWebIntegrationTestContext } from './co
 import { commonWebGraphQlResults } from './graphQlResults'
 import { siteGQLID, siteID } from './jscontext'
 import { highlightFileResult, mixedSearchStreamEvents } from './streaming-search-mocks'
+import { percySnapshotWithVariants } from './utils'
 
 const viewerSettings: Partial<WebGraphQlOperations> = {
     ViewerSettings: () => ({
@@ -102,6 +103,7 @@ describe('Search Notebook', () => {
         await driver.page.waitForSelector('[data-block-id]', { visible: true })
         const blockIds = await getBlockIds()
         expect(blockIds).toHaveLength(2)
+        await percySnapshotWithVariants(driver.page, 'Search Notebook')
     })
 
     it('Should move, duplicate, and delete blocks', async () => {
@@ -126,6 +128,8 @@ describe('Search Notebook', () => {
             await runBlockMenuAction(blockId, 'Delete')
         }
         expect(await getBlockIds()).toHaveLength(0)
+
+        await percySnapshotWithVariants(driver.page, 'Should move, duplicate, and delete blocks')
     })
 
     it('Should add markdown and query blocks, edit, and run them', async () => {
@@ -177,5 +181,6 @@ describe('Search Notebook', () => {
             queryResultContainerSelector
         )
         expect(isResultContainerVisible).toBeTruthy()
+        await percySnapshotWithVariants(driver.page, 'Should add markdown and query blocks, edit, and run them')
     })
 })

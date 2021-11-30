@@ -129,6 +129,10 @@ describe('Search', () => {
                 selector: '#monaco-query-input .suggest-widget.visible span',
             })
             expect(await getSearchFieldValue(driver)).toStrictEqual('-file:')
+            await percySnapshotWithVariants(
+                driver.page,
+                'Completing a negated filter should insert the filter with - prefix'
+            )
         })
     })
 

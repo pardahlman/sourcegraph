@@ -457,6 +457,7 @@ describe('Batches', () => {
                 testContext.driver.sourcegraphBaseUrl + '/users/alice/batch-changes/test-batch-change'
             )
             assert.strictEqual(await driver.page.$('.test-batches-namespace-link'), null)
+            await percySnapshotWithVariants(driver.page, 'lists user batch changes')
         })
 
         it('lists org batch changes', async () => {
