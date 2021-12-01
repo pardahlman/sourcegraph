@@ -34,15 +34,24 @@ type UploadHandler struct {
 	uploadStore uploadstore.Store
 	validators  AuthValidatorMap
 	internal    bool
+	operations  *Operations
 }
 
-func NewUploadHandler(db dbutil.DB, dbStore DBStore, uploadStore uploadstore.Store, internal bool, authValidators AuthValidatorMap) http.Handler {
+func NewUploadHandler(
+	db dbutil.DB,
+	dbStore DBStore,
+	uploadStore uploadstore.Store,
+	internal bool,
+	authValidators AuthValidatorMap,
+	operations *Operations,
+) http.Handler {
 	handler := &UploadHandler{
 		db:          db,
 		dbStore:     dbStore,
 		uploadStore: uploadStore,
 		internal:    internal,
 		validators:  authValidators,
+		operations:  operations,
 	}
 
 	return http.HandlerFunc(handler.handleEnqueue)

@@ -4,12 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"net/http"
 
 	"github.com/cockroachdb/errors"
 	"github.com/inconshreveable/log15"
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/sourcegraph/sourcegraph/enterprise/cmd/frontend/internal/codeintel/httpapi"
 	"github.com/sourcegraph/sourcegraph/enterprise/internal/codeintel/autoindex/enqueuer"
 	"github.com/sourcegraph/sourcegraph/enterprise/internal/codeintel/gitserver"
 	"github.com/sourcegraph/sourcegraph/enterprise/internal/codeintel/repoupdater"
@@ -26,10 +28,12 @@ import (
 )
 
 type Services struct {
-	dbStore     *store.Store
-	lsifStore   *lsifstore.Store
-	repoStore   database.RepoStore
-	uploadStore uploadstore.Store
+	dbStore               *store.Store
+	lsifStore             *lsifstore.Store
+	repoStore             database.RepoStore
+	uploadStore           uploadstore.Store
+	InternalUploadHandler http.Handler
+	ExternalUploadHandler http.Handler
 
 	locker          *locker.Locker
 	gitserverClient *gitserver.Client
@@ -60,6 +64,18 @@ func NewServices(ctx context.Context, siteConfig conftypes.SiteConfigQuerier, db
 		log.Fatalf("Failed to initialize upload store: %s", err)
 	}
 
+	// TODO - construct
+	var operations *httpapi.Operations
+
+	internalUploadHandler, err := NewCodeIntelUploadHandler(ctx, siteConfig, db, true, dbStore, uploadStore, operations)
+	if err != nil {
+		return nil, err
+	}
+	externalUploadHandler, err := NewCodeIntelUploadHandler(ctx, siteConfig, db, false, dbStore, uploadStore, operations)
+	if err != nil {
+		return nil, err
+	}
+
 	// Initialize gitserver client
 	gitserverClient := gitserver.New(dbStore, observationContext)
 	repoUpdaterClient := repoupdater.New(observationContext)
@@ -68,10 +84,12 @@ func NewServices(ctx context.Context, siteConfig conftypes.SiteConfigQuerier, db
 	indexEnqueuer := enqueuer.NewIndexEnqueuer(&enqueuer.DBStoreShim{Store: dbStore}, gitserverClient, repoUpdaterClient, config.AutoIndexEnqueuerConfig, observationContext)
 
 	return &Services{
-		dbStore:     dbStore,
-		lsifStore:   lsifStore,
-		repoStore:   database.ReposWith(dbStore.Store),
-		uploadStore: uploadStore,
+		dbStore:               dbStore,
+		lsifStore:             lsifStore,
+		repoStore:             database.ReposWith(dbStore.Store),
+		uploadStore:           uploadStore,
+		InternalUploadHandler: internalUploadHandler,
+		ExternalUploadHandler: externalUploadHandler,
 
 		locker:          locker,
 		gitserverClient: gitserverClient,
