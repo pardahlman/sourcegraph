@@ -1,8 +1,6 @@
 package httpapi
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -25,7 +23,6 @@ import (
 	"github.com/sourcegraph/sourcegraph/internal/gitserver/gitdomain"
 	"github.com/sourcegraph/sourcegraph/internal/lazyregexp"
 	"github.com/sourcegraph/sourcegraph/internal/types"
-	"github.com/sourcegraph/sourcegraph/lib/codeintel/upload"
 )
 
 type UploadHandler struct {
@@ -62,44 +59,64 @@ var revhashPattern = lazyregexp.New(`^[a-z0-9]{40}$`)
 // POST /upload
 func (h *UploadHandler) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	query := r.URL.Query()
+	body := r.Body
 
-	var repositoryID int
-	if !hasQuery(r, "uploadId") {
-		repoName := getQuery(r, "repository")
-		commit := getQuery(r, "commit")
-
-		if !revhashPattern.Match([]byte(commit)) {
-			http.Error(w, "Commit must be a 40-character revhash", http.StatusBadRequest)
-			return
-		}
-
-		// 🚨 SECURITY: Ensure we return before proxying to the precise-code-intel-api-server upload
-		// endpoint. This endpoint is unprotected, so we need to make sure the user provides a valid
-		// token proving contributor access to the repository.
-		if !h.internal && conf.Get().LsifEnforceAuth && !isSiteAdmin(ctx, h.db) && !enforceAuth(ctx, w, r, repoName, h.validators) {
-			return
-		}
-
-		// 🚨 SECURITY: It is critical to ensure if repository and commit exists after
-		// the above authz check. Otherwise, it is possible to use this endpoint to
-		// brute-force existence of repositories.
-		repo, ok := ensureRepoAndCommitExist(ctx, database.NewDB(h.db), w, repoName, commit)
-		if !ok {
-			return
-		}
-		repositoryID = int(repo.ID)
+	uploadArgs := uploadArgs{
+		uploadID:          getQueryInt(r, "uploadId"),
+		repository:        getQuery(r, "repository"),
+		commit:            getQuery(r, "commit"),
+		root:              sanitizeRoot(getQuery(r, "root")),
+		indexer:           getQuery(r, "indexerName"),
+		associatedIndexID: getQueryInt(r, "associatedIndexId"),
+		suppliedIndex:     hasQuery(r, "index"),
+		index:             getQueryInt(r, "index"),
+		multipart:         hasQuery(r, "multiPart"),
+		numParts:          getQueryInt(r, "numParts"),
+		done:              hasQuery(r, "done"),
 	}
 
-	payload, err := h.handleEnqueueErr(w, r, repositoryID)
+	validation := func() (int, error) {
+		if uploadArgs.commit != "" && !revhashPattern.Match([]byte(uploadArgs.commit)) {
+			return http.StatusBadRequest, errors.Errorf("Commit must be a 40-character revhash")
+		}
+
+		if uploadArgs.uploadID == 0 {
+			// 🚨 SECURITY: Ensure we return before proxying to the precise-code-intel-api-server upload
+			// endpoint. This endpoint is unprotected, so we need to make sure the user provides a valid
+			// token proving contributor access to the repository.
+			if !h.internal && conf.Get().LsifEnforceAuth && !isSiteAdmin(ctx, h.db) {
+				if statusCode, err := enforceAuth(ctx, query, uploadArgs.repository, h.validators); err != nil {
+					return statusCode, err
+				}
+			}
+		}
+
+		//
+		// TODO - why is this condition necessary?
+		//
+
+		if uploadArgs.uploadID == 0 {
+			if repo, statusCode, err := ensureRepoAndCommitExist(ctx, database.NewDB(h.db), uploadArgs.repository, uploadArgs.commit); err != nil {
+				return statusCode, err
+			} else {
+				uploadArgs.repositoryID = int(repo.ID)
+			}
+		}
+
+		return 0, nil
+	}
+
+	if statusCode, err := validation(); err != nil {
+		http.Error(w, err.Error(), statusCode)
+		return
+	}
+
+	payload, err := h.handleEnqueueErr(ctx, w, uploadArgs, body)
 	if err != nil {
 		var e *ClientError
 		if errors.As(err, &e) {
 			http.Error(w, e.Error(), http.StatusBadRequest)
-			return
-		}
-
-		if err == upload.ErrMetadataExceedsBuffer {
-			http.Error(w, "Could not read indexer name from metaData vertex. Please supply it explicitly.", http.StatusBadRequest)
 			return
 		}
 
@@ -116,14 +133,19 @@ func (h *UploadHandler) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// UploadArgs are common arguments required to enqueue an upload for both
-// single-payload and multipart uploads.
-type UploadArgs struct {
-	Commit            string
-	Root              string
-	RepositoryID      int
-	Indexer           string
-	AssociatedIndexID int
+type uploadArgs struct {
+	uploadID          int
+	repository        string
+	repositoryID      int
+	commit            string
+	root              string
+	indexer           string
+	associatedIndexID int
+	suppliedIndex     bool
+	multipart         bool
+	numParts          int
+	index             int
+	done              bool
 }
 
 type enqueuePayload struct {
@@ -149,34 +171,20 @@ type enqueuePayload struct {
 //   - handleEnqueueMultipartSetup
 //   - handleEnqueueMultipartUpload
 //   - handleEnqueueMultipartFinalize
-func (h *UploadHandler) handleEnqueueErr(w http.ResponseWriter, r *http.Request, repositoryID int) (interface{}, error) {
-	ctx := r.Context()
-
-	uploadArgs := UploadArgs{
-		Commit:            getQuery(r, "commit"),
-		Root:              sanitizeRoot(getQuery(r, "root")),
-		RepositoryID:      repositoryID,
-		Indexer:           getQuery(r, "indexerName"),
-		AssociatedIndexID: getQueryInt(r, "associatedIndexId"),
+func (h *UploadHandler) handleEnqueueErr(ctx context.Context, w http.ResponseWriter, uploadArgs uploadArgs, payload io.Reader) (interface{}, error) {
+	if !uploadArgs.multipart && uploadArgs.uploadID == 0 {
+		return h.handleEnqueueSinglePayload(ctx, payload, uploadArgs)
 	}
 
-	if !hasQuery(r, "multiPart") && !hasQuery(r, "uploadId") {
-		return h.handleEnqueueSinglePayload(r, uploadArgs)
+	if uploadArgs.multipart {
+		return h.handleEnqueueMultipartSetup(ctx, uploadArgs)
 	}
 
-	if hasQuery(r, "multiPart") {
-		if numParts := getQueryInt(r, "numParts"); numParts <= 0 {
-			return nil, clientError("illegal number of parts: %d", numParts)
-		} else {
-			return h.handleEnqueueMultipartSetup(r, uploadArgs, numParts)
-		}
-	}
-
-	if !hasQuery(r, "uploadId") {
+	if uploadArgs.uploadID == 0 {
 		return nil, clientError("no uploadId supplied")
 	}
 
-	upload, exists, err := h.dbStore.GetUploadByID(ctx, getQueryInt(r, "uploadId"))
+	upload, exists, err := h.dbStore.GetUploadByID(ctx, uploadArgs.uploadID)
 	if err != nil {
 		return nil, err
 	}
@@ -184,16 +192,12 @@ func (h *UploadHandler) handleEnqueueErr(w http.ResponseWriter, r *http.Request,
 		return nil, clientError("upload not found")
 	}
 
-	if hasQuery(r, "index") {
-		if partIndex := getQueryInt(r, "index"); partIndex < 0 || partIndex >= upload.NumParts {
-			return nil, clientError("illegal part index: index %d is outside the range [0, %d)", partIndex, upload.NumParts)
-		} else {
-			return h.handleEnqueueMultipartUpload(r, upload, partIndex)
-		}
+	if uploadArgs.suppliedIndex {
+		return h.handleEnqueueMultipartUpload(ctx, payload, upload, uploadArgs)
 	}
 
-	if hasQuery(r, "done") {
-		return h.handleEnqueueMultipartFinalize(r, upload)
+	if uploadArgs.done {
+		return h.handleEnqueueMultipartFinalize(ctx, upload)
 	}
 
 	return nil, clientError("no index supplied")
@@ -201,17 +205,7 @@ func (h *UploadHandler) handleEnqueueErr(w http.ResponseWriter, r *http.Request,
 
 // handleEnqueueSinglePayload handles a non-multipart upload. This creates an upload record
 // with state 'queued', proxies the data to the bundle manager, and returns the generated ID.
-func (h *UploadHandler) handleEnqueueSinglePayload(r *http.Request, uploadArgs UploadArgs) (interface{}, error) {
-	ctx := r.Context()
-
-	if uploadArgs.Indexer == "" {
-		indexer, err := inferIndexer(r)
-		if err != nil {
-			return nil, err
-		}
-		uploadArgs.Indexer = indexer
-	}
-
+func (h *UploadHandler) handleEnqueueSinglePayload(ctx context.Context, payload io.Reader, uploadArgs uploadArgs) (interface{}, error) {
 	tx, err := h.dbStore.Transact(ctx)
 	if err != nil {
 		return nil, err
@@ -221,11 +215,11 @@ func (h *UploadHandler) handleEnqueueSinglePayload(r *http.Request, uploadArgs U
 	}()
 
 	id, err := tx.InsertUpload(ctx, store.Upload{
-		Commit:            uploadArgs.Commit,
-		Root:              uploadArgs.Root,
-		RepositoryID:      uploadArgs.RepositoryID,
-		Indexer:           uploadArgs.Indexer,
-		AssociatedIndexID: &uploadArgs.AssociatedIndexID,
+		Commit:            uploadArgs.commit,
+		Root:              uploadArgs.root,
+		RepositoryID:      uploadArgs.repositoryID,
+		Indexer:           uploadArgs.indexer,
+		AssociatedIndexID: &uploadArgs.associatedIndexID,
 		State:             "uploading",
 		NumParts:          1,
 		UploadedParts:     []int{0},
@@ -234,7 +228,7 @@ func (h *UploadHandler) handleEnqueueSinglePayload(r *http.Request, uploadArgs U
 		return nil, err
 	}
 
-	size, err := h.uploadStore.Upload(ctx, fmt.Sprintf("upload-%d.lsif.gz", id), r.Body)
+	size, err := h.uploadStore.Upload(ctx, fmt.Sprintf("upload-%d.lsif.gz", id), payload)
 	if err != nil {
 		return nil, err
 	}
@@ -246,8 +240,8 @@ func (h *UploadHandler) handleEnqueueSinglePayload(r *http.Request, uploadArgs U
 	log15.Info(
 		"Enqueued upload",
 		"id", id,
-		"repository_id", uploadArgs.RepositoryID,
-		"commit", uploadArgs.Commit,
+		"repository_id", uploadArgs.repositoryID,
+		"commit", uploadArgs.commit,
 	)
 
 	// older versions of src-cli expect a string
@@ -257,17 +251,19 @@ func (h *UploadHandler) handleEnqueueSinglePayload(r *http.Request, uploadArgs U
 // handleEnqueueMultipartSetup handles the first request in a multipart upload. This creates a
 // new upload record with state 'uploading' and returns the generated ID to be used in subsequent
 // requests for the same upload.
-func (h *UploadHandler) handleEnqueueMultipartSetup(r *http.Request, uploadArgs UploadArgs, numParts int) (interface{}, error) {
-	ctx := r.Context()
+func (h *UploadHandler) handleEnqueueMultipartSetup(ctx context.Context, uploadArgs uploadArgs) (interface{}, error) {
+	if uploadArgs.numParts <= 0 {
+		return nil, clientError("illegal number of parts: %d", uploadArgs.numParts)
+	}
 
 	id, err := h.dbStore.InsertUpload(ctx, store.Upload{
-		Commit:            uploadArgs.Commit,
-		Root:              uploadArgs.Root,
-		RepositoryID:      uploadArgs.RepositoryID,
-		Indexer:           uploadArgs.Indexer,
-		AssociatedIndexID: &uploadArgs.AssociatedIndexID,
+		Commit:            uploadArgs.commit,
+		Root:              uploadArgs.root,
+		RepositoryID:      uploadArgs.repositoryID,
+		Indexer:           uploadArgs.indexer,
+		AssociatedIndexID: &uploadArgs.associatedIndexID,
 		State:             "uploading",
-		NumParts:          numParts,
+		NumParts:          uploadArgs.numParts,
 		UploadedParts:     nil,
 	})
 	if err != nil {
@@ -277,8 +273,8 @@ func (h *UploadHandler) handleEnqueueMultipartSetup(r *http.Request, uploadArgs 
 	log15.Info(
 		"Enqueued upload",
 		"id", id,
-		"repository_id", uploadArgs.RepositoryID,
-		"commit", uploadArgs.Commit,
+		"repository_id", uploadArgs.repositoryID,
+		"commit", uploadArgs.commit,
 	)
 
 	// older versions of src-cli expect a string
@@ -287,14 +283,17 @@ func (h *UploadHandler) handleEnqueueMultipartSetup(r *http.Request, uploadArgs 
 
 // handleEnqueueMultipartUpload handles a partial upload in a multipart upload. This proxies the
 // data to the bundle manager and marks the part index in the upload record.
-func (h *UploadHandler) handleEnqueueMultipartUpload(r *http.Request, upload store.Upload, partIndex int) (interface{}, error) {
-	ctx := r.Context()
-	if _, err := h.uploadStore.Upload(ctx, fmt.Sprintf("upload-%d.%d.lsif.gz", upload.ID, partIndex), r.Body); err != nil {
+func (h *UploadHandler) handleEnqueueMultipartUpload(ctx context.Context, payload io.Reader, upload store.Upload, uploadArgs uploadArgs) (interface{}, error) {
+	if uploadArgs.index < 0 || uploadArgs.index >= upload.NumParts {
+		return nil, clientError("illegal part index: index %d is outside the range [0, %d)", uploadArgs.index, upload.NumParts)
+	}
+
+	if _, err := h.uploadStore.Upload(ctx, fmt.Sprintf("upload-%d.%d.lsif.gz", upload.ID, uploadArgs.index), payload); err != nil {
 		h.markUploadAsFailed(context.Background(), h.dbStore, upload.ID, err)
 		return nil, err
 	}
 
-	if err := h.dbStore.AddUploadPart(ctx, upload.ID, partIndex); err != nil {
+	if err := h.dbStore.AddUploadPart(ctx, upload.ID, uploadArgs.index); err != nil {
 		return nil, err
 	}
 
@@ -304,9 +303,7 @@ func (h *UploadHandler) handleEnqueueMultipartUpload(r *http.Request, upload sto
 // handleEnqueueMultipartFinalize handles the final request of a multipart upload. This transitions the
 // upload from 'uploading' to 'queued', then instructs the bundle manager to concatenate all of the part
 // files together.
-func (h *UploadHandler) handleEnqueueMultipartFinalize(r *http.Request, upload store.Upload) (interface{}, error) {
-	ctx := r.Context()
-
+func (h *UploadHandler) handleEnqueueMultipartFinalize(ctx context.Context, upload store.Upload) (interface{}, error) {
 	if len(upload.UploadedParts) != upload.NumParts {
 		return nil, clientError("upload is missing %d parts", upload.NumParts-len(upload.UploadedParts))
 	}
@@ -359,75 +356,36 @@ func (h *UploadHandler) markUploadAsFailed(ctx context.Context, tx DBStore, uplo
 	}
 }
 
-// inferIndexer returns the tool name from the metadata vertex at the start of the the given
-// input stream. This method must destructively read the request body, but will re-assign the
-// Body field with a reader that holds the same information as the original request.
-//
-// Newer versions of src-cli will do this same check before uploading the file. However, older
-// versions of src-cli will not guarantee that the index name query parameter is sent. Requiring
-// it now will break valid workflows. We only need ot maintain backwards compatibility on single
-// payload uploads, as everything else is as new as the version of src-cli that always sends the
-// indexer name.
-func inferIndexer(r *http.Request) (string, error) {
-	// Tee all reads from the body into a buffer so that we don't destructively consume
-	// any data from the body payload.
-	var buf bytes.Buffer
-	teeReader := io.TeeReader(r.Body, &buf)
-
-	gzipReader, err := gzip.NewReader(teeReader)
-	if err != nil {
-		return "", err
-	}
-
-	// Read from the stream until we extract a tool name. This method is careful not to
-	// take too much resident memory in the case of a malformed bundle.
-	name, err := upload.ReadIndexerName(gzipReader)
-	if err != nil {
-		return "", err
-	}
-
-	// Replace the body of the request with a reader that will produce all of the same
-	// content: all of the data that was already read from r.Body, plus the remaining
-	// content from r.Body.
-	r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(buf.Bytes()), r.Body))
-
-	return name, nil
-}
-
 // 🚨 SECURITY: It is critical to call this function after necessary authz check
 // because this function would bypass authz to for testing if the repository and
 // commit exists in Sourcegraph.
-func ensureRepoAndCommitExist(ctx context.Context, db database.DB, w http.ResponseWriter, repoName, commit string) (*types.Repo, bool) {
+func ensureRepoAndCommitExist(ctx context.Context, db database.DB, repoName, commit string) (*types.Repo, int, error) {
 	// This function won't be able to see all repositories without bypassing authz.
 	ctx = actor.WithInternalActor(ctx)
 
 	repo, err := backend.NewRepos(db.Repos()).GetByName(ctx, api.RepoName(repoName))
 	if err != nil {
 		if errcode.IsNotFound(err) {
-			http.Error(w, fmt.Sprintf("unknown repository %q", repoName), http.StatusNotFound)
-			return nil, false
+			return nil, http.StatusNotFound, errors.Errorf("unknown repository %q", repoName)
 		}
 
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return nil, false
+		return nil, http.StatusInternalServerError, err
 	}
 
 	if _, err := backend.NewRepos(db.Repos()).ResolveRev(ctx, repo, commit); err != nil {
 		if errors.HasType(err, &gitdomain.RevisionNotFoundError{}) {
-			http.Error(w, fmt.Sprintf("unknown commit %q", commit), http.StatusNotFound)
-			return nil, false
+			return nil, http.StatusNotFound, errors.Errorf("unknown commit %q", commit)
 		}
 
 		// If the repository is currently being cloned (which is most likely to happen on dotcom),
 		// then we want to continue to queue the LSIF upload record to unblock the client, then have
 		// the worker wait until the rev is resolvable before starting to process.
 		if !gitdomain.IsCloneInProgress(err) {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return nil, false
+			return nil, http.StatusInternalServerError, err
 		}
 	}
 
-	return repo, true
+	return repo, 0, nil
 }
 
 // formatAWSError returns the unwrapped, root AWS/S3 error. This method returns

@@ -3,8 +3,10 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	"github.com/inconshreveable/log15"
 
 	"github.com/sourcegraph/sourcegraph/internal/database"
@@ -26,26 +28,24 @@ func isSiteAdmin(ctx context.Context, db dbutil.DB) bool {
 	return user != nil && user.SiteAdmin
 }
 
-var DefaultValidatorByCodeHost = map[string]func(context.Context, *http.Request, string) (int, error){
+var DefaultValidatorByCodeHost = map[string]func(context.Context, url.Values, string) (int, error){
 	"github.com": enforceAuthViaGitHub,
 }
 
-type AuthValidatorMap = map[string]func(context.Context, *http.Request, string) (int, error)
+type AuthValidatorMap = map[string]func(context.Context, url.Values, string) (int, error)
 
-func enforceAuth(ctx context.Context, w http.ResponseWriter, r *http.Request, repoName string, validators AuthValidatorMap) bool {
+func enforceAuth(ctx context.Context, query url.Values, repoName string, validators AuthValidatorMap) (int, error) {
 	for codeHost, validator := range validators {
 		if !strings.HasPrefix(repoName, codeHost) {
 			continue
 		}
 
-		if status, err := validator(ctx, r, repoName); err != nil {
-			http.Error(w, err.Error(), status)
-			return false
+		if status, err := validator(ctx, query, repoName); err != nil {
+			return status, err
 		}
 
-		return true
+		return 0, nil
 	}
 
-	http.Error(w, "verification not supported for code host - see https://github.com/sourcegraph/sourcegraph/issues/4967", http.StatusUnprocessableEntity)
-	return false
+	return http.StatusUnprocessableEntity, errors.Errorf("verification not supported for code host - see https://github.com/sourcegraph/sourcegraph/issues/4967")
 }

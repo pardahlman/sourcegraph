@@ -255,6 +255,8 @@ func TestHandleEnqueueMultipartSetup(t *testing.T) {
 }
 
 func TestHandleEnqueueMultipartUpload(t *testing.T) {
+	setupRepoMocks(t)
+
 	mockDBStore := NewMockDBStore()
 	mockUploadStore := uploadstoremocks.NewMockStore()
 
@@ -331,6 +333,8 @@ func TestHandleEnqueueMultipartUpload(t *testing.T) {
 }
 
 func TestHandleEnqueueMultipartFinalize(t *testing.T) {
+	setupRepoMocks(t)
+
 	mockDBStore := NewMockDBStore()
 	mockUploadStore := uploadstoremocks.NewMockStore()
 
@@ -398,6 +402,8 @@ func TestHandleEnqueueMultipartFinalize(t *testing.T) {
 }
 
 func TestHandleEnqueueMultipartFinalizeIncompleteUpload(t *testing.T) {
+	setupRepoMocks(t)
+
 	mockDBStore := NewMockDBStore()
 	mockUploadStore := uploadstoremocks.NewMockStore()
 
@@ -512,8 +518,8 @@ func TestHandleEnqueueAuth(t *testing.T) {
 			db:          db,
 			dbStore:     mockDBStore,
 			uploadStore: mockUploadStore,
-			validators: map[string]func(context.Context, *http.Request, string) (int, error){
-				"github": func(context.Context, *http.Request, string) (int, error) {
+			validators: map[string]func(context.Context, url.Values, string) (int, error){
+				"github": func(context.Context, url.Values, string) (int, error) {
 					if user.name != "owning-user" {
 						return http.StatusUnauthorized, errors.New("sample text import cycle")
 					}

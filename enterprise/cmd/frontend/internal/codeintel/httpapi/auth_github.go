@@ -19,8 +19,8 @@ var (
 	githubURL = &url.URL{Scheme: "https", Host: "api.github.com"}
 )
 
-func enforceAuthViaGitHub(ctx context.Context, r *http.Request, repoName string) (int, error) {
-	githubToken := r.URL.Query().Get("github_token")
+func enforceAuthViaGitHub(ctx context.Context, query url.Values, repoName string) (int, error) {
+	githubToken := query.Get("github_token")
 	if githubToken == "" {
 		return http.StatusUnauthorized, ErrGitHubMissingToken
 	}
