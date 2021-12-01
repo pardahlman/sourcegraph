@@ -26,6 +26,7 @@ import (
 	"github.com/sourcegraph/sourcegraph/internal/conf"
 	"github.com/sourcegraph/sourcegraph/internal/database/dbtest"
 	"github.com/sourcegraph/sourcegraph/internal/database/dbutil"
+	"github.com/sourcegraph/sourcegraph/internal/observation"
 	"github.com/sourcegraph/sourcegraph/internal/types"
 	"github.com/sourcegraph/sourcegraph/schema"
 )
@@ -75,6 +76,7 @@ func TestHandleEnqueueSinglePayload(t *testing.T) {
 	h := &UploadHandler{
 		dbStore:     mockDBStore,
 		uploadStore: mockUploadStore,
+		operations:  NewOperations(&observation.TestContext),
 	}
 	h.handleEnqueue(w, r)
 
@@ -163,6 +165,7 @@ func TestHandleEnqueueSinglePayloadNoIndexerName(t *testing.T) {
 	h := &UploadHandler{
 		dbStore:     mockDBStore,
 		uploadStore: mockUploadStore,
+		operations:  NewOperations(&observation.TestContext),
 	}
 	h.handleEnqueue(w, r)
 
@@ -221,6 +224,7 @@ func TestHandleEnqueueMultipartSetup(t *testing.T) {
 	h := &UploadHandler{
 		dbStore:     mockDBStore,
 		uploadStore: mockUploadStore,
+		operations:  NewOperations(&observation.TestContext),
 	}
 	h.handleEnqueue(w, r)
 
@@ -287,6 +291,7 @@ func TestHandleEnqueueMultipartUpload(t *testing.T) {
 	h := &UploadHandler{
 		dbStore:     mockDBStore,
 		uploadStore: mockUploadStore,
+		operations:  NewOperations(&observation.TestContext),
 	}
 	h.handleEnqueue(w, r)
 
@@ -356,6 +361,7 @@ func TestHandleEnqueueMultipartFinalize(t *testing.T) {
 	h := &UploadHandler{
 		dbStore:     mockDBStore,
 		uploadStore: mockUploadStore,
+		operations:  NewOperations(&observation.TestContext),
 	}
 	h.handleEnqueue(w, r)
 
@@ -420,6 +426,7 @@ func TestHandleEnqueueMultipartFinalizeIncompleteUpload(t *testing.T) {
 	h := &UploadHandler{
 		dbStore:     mockDBStore,
 		uploadStore: mockUploadStore,
+		operations:  NewOperations(&observation.TestContext),
 	}
 	h.handleEnqueue(w, r)
 
@@ -513,6 +520,7 @@ func TestHandleEnqueueAuth(t *testing.T) {
 					return 200, nil
 				},
 			},
+			operations: NewOperations(&observation.TestContext),
 		}
 		h.handleEnqueue(w, r)
 
