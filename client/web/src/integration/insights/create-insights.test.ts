@@ -7,6 +7,7 @@ import { emptyResponse } from '@sourcegraph/shared/src/testing/integration/graph
 import { afterEachSaveScreenshotIfFailed } from '@sourcegraph/shared/src/testing/screenshotReporter'
 
 import { createWebIntegrationTestContext, WebIntegrationTestContext } from '../context'
+import { percySnapshotWithVariants } from '../utils'
 
 import {
     INSIGHT_TYPES_MIGRATION_BULK_SEARCH,
@@ -87,8 +88,12 @@ describe('Code insight create insight page', () => {
         // charts - pie chart
         await driver.page.waitForSelector('[data-testid="pie-chart-arc-element"]')
 
+        // To blur repository input
+        await driver.page.click('input[name="title"]')
         // Change insight title
         await driver.page.type('input[name="title"]', 'Test insight title')
+
+        await percySnapshotWithVariants(driver.page, 'Code insights create new language usage insight')
 
         const addToUserConfigRequest = await testContext.waitForGraphQLRequest(async () => {
             await driver.page.click('[data-testid="insight-save-button"]')
