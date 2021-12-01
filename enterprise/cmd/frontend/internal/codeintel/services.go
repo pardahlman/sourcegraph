@@ -66,8 +66,8 @@ func NewServices(ctx context.Context, siteConfig conftypes.SiteConfigQuerier, db
 		log.Fatalf("Failed to initialize upload store: %s", err)
 	}
 
-	// TODO - construct
-	var operations *httpapi.Operations
+	// Initialize http endpoints
+	operations := httpapi.NewOperations(observationContext)
 
 	internalUploadHandler, err := NewCodeIntelUploadHandler(ctx, siteConfig, db, true, dbStore, uploadStore, operations)
 	if err != nil {
