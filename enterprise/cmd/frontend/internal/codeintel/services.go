@@ -86,10 +86,11 @@ func NewServices(ctx context.Context, siteConfig conftypes.SiteConfigQuerier, db
 	indexEnqueuer := enqueuer.NewIndexEnqueuer(&enqueuer.DBStoreShim{Store: dbStore}, gitserverClient, repoUpdaterClient, config.AutoIndexEnqueuerConfig, observationContext)
 
 	return &Services{
-		dbStore:               dbStore,
-		lsifStore:             lsifStore,
-		repoStore:             database.ReposWith(dbStore.Store),
-		uploadStore:           uploadStore,
+		dbStore:     dbStore,
+		lsifStore:   lsifStore,
+		repoStore:   database.ReposWith(dbStore.Store),
+		uploadStore: uploadStore,
+
 		InternalUploadHandler: internalUploadHandler,
 		ExternalUploadHandler: externalUploadHandler,
 
