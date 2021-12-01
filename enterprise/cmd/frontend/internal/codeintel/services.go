@@ -28,10 +28,12 @@ import (
 )
 
 type Services struct {
-	dbStore               *store.Store
-	lsifStore             *lsifstore.Store
-	repoStore             database.RepoStore
-	uploadStore           uploadstore.Store
+	dbStore     *store.Store
+	lsifStore   *lsifstore.Store
+	repoStore   database.RepoStore
+	uploadStore uploadstore.Store
+
+	// shared with executorqueue
 	InternalUploadHandler http.Handler
 	ExternalUploadHandler http.Handler
 
